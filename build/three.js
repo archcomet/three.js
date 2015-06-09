@@ -7418,7 +7418,6 @@ THREE.EventDispatcher.prototype = {
 
 		constructor: THREE.Raycaster,
 
-		precision: 0.0001,
 		linePrecision: 1,
 
 		set: function ( origin, direction ) {
@@ -12697,6 +12696,8 @@ THREE.XHRLoader.prototype = {
 
 		scope.manager.itemStart( url );
 
+		return request;
+
 	},
 
 	setResponseType: function ( value ) {
@@ -14075,6 +14076,9 @@ THREE.ObjectLoader.prototype = {
 				if ( data.scale !== undefined ) object.scale.fromArray( data.scale );
 
 			}
+
+			if ( data.castShadow !== undefined ) object.castShadow = data.castShadow;
+			if ( data.receiveShadow !== undefined ) object.receiveShadow = data.receiveShadow;
 
 			if ( data.visible !== undefined ) object.visible = data.visible;
 			if ( data.userData !== undefined ) object.userData = data.userData;
@@ -15955,6 +15959,8 @@ THREE.PointCloud.prototype.raycast = ( function () {
 
 				var distance = raycaster.ray.origin.distanceTo( intersectPoint );
 
+				if ( distance < raycaster.near || distance > raycaster.far ) return;
+
 				intersects.push( {
 
 					distance: distance,
@@ -16435,7 +16441,6 @@ THREE.Mesh.prototype.raycast = ( function () {
 			var attributes = geometry.attributes;
 
 			var a, b, c;
-			var precision = raycaster.precision;
 
 			if ( attributes.index !== undefined ) {
 
@@ -16481,7 +16486,7 @@ THREE.Mesh.prototype.raycast = ( function () {
 
 						var distance = raycaster.ray.origin.distanceTo( intersectionPoint );
 
-						if ( distance < precision || distance < raycaster.near || distance > raycaster.far ) continue;
+						if ( distance < raycaster.near || distance > raycaster.far ) continue;
 
 						intersects.push( {
 
@@ -16527,7 +16532,7 @@ THREE.Mesh.prototype.raycast = ( function () {
 
 					var distance = raycaster.ray.origin.distanceTo( intersectionPoint );
 
-					if ( distance < precision || distance < raycaster.near || distance > raycaster.far ) continue;
+					if ( distance < raycaster.near || distance > raycaster.far ) continue;
 
 					intersects.push( {
 
@@ -16549,7 +16554,6 @@ THREE.Mesh.prototype.raycast = ( function () {
 			var objectMaterials = isFaceMaterial === true ? this.material.materials : null;
 
 			var a, b, c;
-			var precision = raycaster.precision;
 
 			var vertices = geometry.vertices;
 
@@ -16622,7 +16626,7 @@ THREE.Mesh.prototype.raycast = ( function () {
 
 				var distance = raycaster.ray.origin.distanceTo( intersectionPoint );
 
-				if ( distance < precision || distance < raycaster.near || distance > raycaster.far ) continue;
+				if ( distance < raycaster.near || distance > raycaster.far ) continue;
 
 				intersects.push( {
 
@@ -19387,7 +19391,7 @@ THREE.WebGLRenderer = function ( parameters ) {
 
 	this.setPixelRatio = function ( value ) {
 
-		pixelRatio = value;
+		if ( value !== undefined ) pixelRatio = value;
 
 	};
 
@@ -19688,14 +19692,15 @@ THREE.WebGLRenderer = function ( parameters ) {
 		if ( object.hasUvs && ! object.__webglUvBuffer ) object.__webglUvBuffer = _gl.createBuffer();
 		if ( object.hasColors && ! object.__webglColorBuffer ) object.__webglColorBuffer = _gl.createBuffer();
 
+		var attributes = program.getAttributes();
+
 		if ( object.hasPositions ) {
 
 			_gl.bindBuffer( _gl.ARRAY_BUFFER, object.__webglVertexBuffer );
 			_gl.bufferData( _gl.ARRAY_BUFFER, object.positionArray, _gl.DYNAMIC_DRAW );
 
-			state.enableAttribute( program.attributes.position );
-
-			_gl.vertexAttribPointer( program.attributes.position, 3, _gl.FLOAT, false, 0, 0 );
+			state.enableAttribute( attributes.position );
+			_gl.vertexAttribPointer( attributes.position, 3, _gl.FLOAT, false, 0, 0 );
 
 		}
 
@@ -19748,9 +19753,9 @@ THREE.WebGLRenderer = function ( parameters ) {
 
 			_gl.bufferData( _gl.ARRAY_BUFFER, object.normalArray, _gl.DYNAMIC_DRAW );
 
-			state.enableAttribute( program.attributes.normal );
+			state.enableAttribute( attributes.normal );
 
-			_gl.vertexAttribPointer( program.attributes.normal, 3, _gl.FLOAT, false, 0, 0 );
+			_gl.vertexAttribPointer( attributes.normal, 3, _gl.FLOAT, false, 0, 0 );
 
 		}
 
@@ -19759,9 +19764,9 @@ THREE.WebGLRenderer = function ( parameters ) {
 			_gl.bindBuffer( _gl.ARRAY_BUFFER, object.__webglUvBuffer );
 			_gl.bufferData( _gl.ARRAY_BUFFER, object.uvArray, _gl.DYNAMIC_DRAW );
 
-			state.enableAttribute( program.attributes.uv );
+			state.enableAttribute( attributes.uv );
 
-			_gl.vertexAttribPointer( program.attributes.uv, 2, _gl.FLOAT, false, 0, 0 );
+			_gl.vertexAttribPointer( attributes.uv, 2, _gl.FLOAT, false, 0, 0 );
 
 		}
 
@@ -19770,9 +19775,9 @@ THREE.WebGLRenderer = function ( parameters ) {
 			_gl.bindBuffer( _gl.ARRAY_BUFFER, object.__webglColorBuffer );
 			_gl.bufferData( _gl.ARRAY_BUFFER, object.colorArray, _gl.DYNAMIC_DRAW );
 
-			state.enableAttribute( program.attributes.color );
+			state.enableAttribute( attributes.color );
 
-			_gl.vertexAttribPointer( program.attributes.color, 3, _gl.FLOAT, false, 0, 0 );
+			_gl.vertexAttribPointer( attributes.color, 3, _gl.FLOAT, false, 0, 0 );
 
 		}
 
@@ -19802,7 +19807,10 @@ THREE.WebGLRenderer = function ( parameters ) {
 		}
 
 		var geometryAttributes = geometry.attributes;
-		var programAttributes = program.attributes;
+
+		var programAttributes = program.getAttributes();
+
+		var materialDefaultAttributeValues = material.defaultAttributeValues;
 
 		for ( var name in programAttributes ) {
 
@@ -19871,17 +19879,27 @@ THREE.WebGLRenderer = function ( parameters ) {
 
 					}
 
-				} else if ( material.defaultAttributeValues !== undefined ) {
+				} else if ( materialDefaultAttributeValues !== undefined ) {
 
-					if ( material.defaultAttributeValues[ name ] !== undefined ) {
+					var value = materialDefaultAttributeValues[ name ];
+					if ( value !== undefined ) {
 
-						if ( material.defaultAttributeValues[ name ].length === 2 ) {
+						switch ( value.length ) {
 
-							_gl.vertexAttrib2fv( programAttribute, material.defaultAttributeValues[ name ] );
+							case 2:
+								_gl.vertexAttrib2fv( programAttribute, value );
+								break;
 
-						} else if ( material.defaultAttributeValues[ name ].length === 3 ) {
+							case 3:
+								_gl.vertexAttrib3fv( programAttribute, value );
+								break;
 
-							_gl.vertexAttrib3fv( programAttribute, material.defaultAttributeValues[ name ] );
+							case 4:
+								_gl.vertexAttrib4fv( programAttribute, value );
+								break;
+
+							default:
+								_gl.vertexAttrib1fv( programAttribute, value );
 
 						}
 
@@ -20153,7 +20171,7 @@ THREE.WebGLRenderer = function ( parameters ) {
 
 			var type, size;
 
-			if ( index.array instanceof Uint32Array ) {
+			if ( index.array instanceof Uint32Array && extensions.get( 'OES_element_index_uint' ) ) {
 
 				type = _gl.UNSIGNED_INT;
 				size = 4;
@@ -20394,12 +20412,6 @@ THREE.WebGLRenderer = function ( parameters ) {
 			return a.id - b.id;
 
 		}
-
-	}
-
-	function numericalSort ( a, b ) {
-
-		return b[ 0 ] - a[ 0 ];
 
 	}
 
@@ -20898,7 +20910,7 @@ THREE.WebGLRenderer = function ( parameters ) {
 
 		material.program = program;
 
-		var attributes = program.attributes;
+		var attributes = program.getAttributes();
 
 		if ( material.morphTargets ) {
 
@@ -20934,9 +20946,10 @@ THREE.WebGLRenderer = function ( parameters ) {
 
 		material.uniformsList = [];
 
+		var uniformLocations = material.program.getUniforms();
 		for ( var u in material.__webglShader.uniforms ) {
 
-			var location = material.program.uniforms[ u ];
+			var location = uniformLocations[ u ];
 
 			if ( location ) {
 				material.uniformsList.push( [ material.__webglShader.uniforms[ u ], location ] );
@@ -20982,7 +20995,7 @@ THREE.WebGLRenderer = function ( parameters ) {
 		var refreshLights = false;
 
 		var program = material.program,
-			p_uniforms = program.uniforms,
+			p_uniforms = program.getUniforms(),
 			m_uniforms = material.__webglShader.uniforms;
 
 		if ( program.id !== _currentProgram ) {
@@ -23429,14 +23442,29 @@ THREE.WebGLProgram = ( function () {
 
 	}
 
-	function cacheUniformLocations( gl, program, identifiers ) {
+	function fetchUniformLocations( gl, program, identifiers ) {
+
 
 		var uniforms = {};
 
-		for ( var i = 0, l = identifiers.length; i < l; i ++ ) {
+		var n = gl.getProgramParameter( program, gl.ACTIVE_UNIFORMS );
 
-			var id = identifiers[ i ];
-			uniforms[ id ] = gl.getUniformLocation( program, id );
+		for ( var i = 0; i < n; i ++ ) {
+
+			var info = gl.getActiveUniform( program , i );
+			var name = info.name;
+			var location = gl.getUniformLocation( program, name );
+
+			//console.log("THREE.WebGLProgram: ACTIVE UNIFORM:", name);
+
+			var suffixPos = name.lastIndexOf( '[0]' );
+			if ( suffixPos !== -1 && suffixPos === name.length - 3 ) {
+
+				uniforms[ name.substr( 0, suffixPos ) ] = location;
+
+			}
+
+			uniforms[ name ] = location;
 
 		}
 
@@ -23444,14 +23472,20 @@ THREE.WebGLProgram = ( function () {
 
 	}
 
-	function cacheAttributeLocations( gl, program, identifiers ) {
+	function fetchAttributeLocations( gl, program, identifiers ) {
 
 		var attributes = {};
 
-		for ( var i = 0, l = identifiers.length; i < l; i ++ ) {
+		var n = gl.getProgramParameter( program, gl.ACTIVE_ATTRIBUTES );
 
-			var id = identifiers[ i ];
-			attributes[ id ] = gl.getAttribLocation( program, id );
+		for ( var i = 0; i < n; i ++ ) {
+
+			var info = gl.getActiveAttrib( program , i );
+			var name = info.name;
+
+			//console.log("THREE.WebGLProgram: ACTIVE VERTEX ATTRIBUTE:", name);
+
+			attributes[ name ] = gl.getAttribLocation( program, name );
 
 		}
 
@@ -23459,15 +23493,9 @@ THREE.WebGLProgram = ( function () {
 
 	}
 
-	function programArrayToString( previousValue, currentValue, index, array ) {
+	function filterEmptyLine( string ) {
 
-		if ( currentValue !== '' && currentValue !== undefined && currentValue !== null ) {
-
-			return previousValue + currentValue + '\n';
-
-		}
-
-		return previousValue;
+		return string !== '';
 
 	}
 
@@ -23569,16 +23597,16 @@ THREE.WebGLProgram = ( function () {
 
 		var program = gl.createProgram();
 
-		var prefix_vertex, prefix_fragment;
+		var prefixVertex, prefixFragment;
 
 		if ( material instanceof THREE.RawShaderMaterial ) {
 
-			prefix_vertex = '';
-			prefix_fragment = '';
+			prefixVertex = '';
+			prefixFragment = '';
 
 		} else {
 
-			prefix_vertex = [
+			prefixVertex = [
 
 				'precision ' + parameters.precision + ' float;',
 				'precision ' + parameters.precision + ' int;',
@@ -23681,11 +23709,11 @@ THREE.WebGLProgram = ( function () {
 
 				'#endif',
 
-				''
+				'\n'
 
-			].reduce( programArrayToString, '' );
+			].filter( filterEmptyLine ).join( '\n' );
 
-			prefix_fragment = [
+			prefixFragment = [
 
 				( parameters.bumpMap || parameters.normalMap || parameters.flatShading || material.derivatives ) ? '#extension GL_OES_standard_derivatives : enable' : '',
 
@@ -23739,14 +23767,18 @@ THREE.WebGLProgram = ( function () {
 
 				'uniform mat4 viewMatrix;',
 				'uniform vec3 cameraPosition;',
-				''
 
-			].reduce( programArrayToString, '' );
+				'\n'
+
+			].filter( filterEmptyLine ).join( '\n' );
 
 		}
 
-		var glVertexShader = new THREE.WebGLShader( gl, gl.VERTEX_SHADER, prefix_vertex + vertexShader );
-		var glFragmentShader = new THREE.WebGLShader( gl, gl.FRAGMENT_SHADER, prefix_fragment + fragmentShader );
+		var vertexGlsl = prefixVertex + vertexShader;
+		var fragmentGlsl = prefixFragment + fragmentShader;
+
+		var glVertexShader = new THREE.WebGLShader( gl, gl.VERTEX_SHADER, vertexGlsl );
+		var glFragmentShader = new THREE.WebGLShader( gl, gl.FRAGMENT_SHADER, fragmentGlsl );
 
 		gl.attachShader( program, glVertexShader );
 		gl.attachShader( program, glFragmentShader );
@@ -23784,91 +23816,57 @@ THREE.WebGLProgram = ( function () {
 		gl.deleteShader( glVertexShader );
 		gl.deleteShader( glFragmentShader );
 
-		// cache uniform locations
+		// set up caching for uniform locations
 
-		var identifiers = [
+		var getUniforms = function() { return this._cachedUniforms; };
 
-			'viewMatrix',
-			'modelViewMatrix',
-			'projectionMatrix',
-			'normalMatrix',
-			'modelMatrix',
-			'cameraPosition',
-			'morphTargetInfluences',
-			'bindMatrix',
-			'bindMatrixInverse'
+		this.getUniforms = function() {
 
-		];
+			// fetch, cache, and next time just use a dumb accessor
+			var uniforms = fetchUniformLocations( gl, program );
+			this._cachedUniforms = uniforms;
+			this.getUniforms = getUniforms;
+			return uniforms;
 
-		if ( parameters.useVertexTexture ) {
+		};
 
-			identifiers.push( 'boneTexture', 'boneTextureWidth', 'boneTextureHeight' );
+		// set up caching for attribute locations
 
-		} else {
+		var getAttributes = function() { return this._cachedAttributes; };
 
-			identifiers.push( 'boneGlobalMatrices' );
+		this.getAttributes = function() {
 
-		}
+			var attributes = fetchAttributeLocations( gl, program );
+			this._cachedAttributes = attributes;
+			this.getAttributes = getAttributes;
+			return attributes;
 
-		if ( parameters.logarithmicDepthBuffer ) {
+		};
 
-			identifiers.push( 'logDepthBufFC' );
+		// DEPRECATED
 
-		}
+		Object.defineProperties( this, {
 
-		for ( var u in uniforms ) {
+			uniforms: {
+				get: function() {
 
-			identifiers.push( u );
+					console.warn( 'THREE.WebGLProgram: .uniforms is now .getUniforms().' );
+					return this.getUniforms();
 
-		}
+				}
+			},
 
-		this.uniforms = cacheUniformLocations( gl, program, identifiers );
+			attributes: {
+				get: function() {
 
-		// cache attributes locations
+					console.warn( 'THREE.WebGLProgram: .attributes is now .getAttributes().' );
+					return this.getAttributes();
 
-		if ( material instanceof THREE.RawShaderMaterial ) {
-
-			identifiers = attributes;
-
-		} else {
-
-			identifiers = [
-
-				'position',
-				'normal',
-				'uv',
-				'uv2',
-				'tangent',
-				'color',
-				'skinIndex',
-				'skinWeight',
-				'lineDistance'
-
-			];
-
-			for ( var i = 0; i < parameters.maxMorphTargets; i ++ ) {
-
-				identifiers.push( 'morphTarget' + i );
-
+				}
 			}
 
-			for ( var i = 0; i < parameters.maxMorphNormals; i ++ ) {
+		});
 
-				identifiers.push( 'morphNormal' + i );
-
-			}
-
-			// ShaderMaterial attributes
-
-			if ( Array.isArray( attributes ) ) {
-
-				identifiers = identifiers.concat( attributes );
-
-			}
-
-		}
-
-		this.attributes = cacheAttributeLocations( gl, program, identifiers );
 
 		//
 
@@ -24877,7 +24875,12 @@ THREE.WebGLState = function ( gl, paramThreeToGL ) {
 
 		for ( var i = 0; i < enabledAttributes.length; i ++ ) {
 
-			enabledAttributes[ i ] = 0;
+			if ( enabledAttributes[ i ] === 1 ) {
+
+				gl.disableVertexAttribArray( i );
+				enabledAttributes[ i ] = 0;
+
+			}
 
 		}
 
